@@ -15,27 +15,37 @@ export default function App() {
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   
+  // LIVE BALANCE & LEDGER STATE
+  const [currentBalance, setCurrentBalance] = useState(142050);
+  const [history, setHistory] = useState([]);
+
   // Upgraded Risk Evidence State
   const [riskSignals, setRiskSignals] = useState([]);
   const [finalScore, setFinalScore] = useState(0);
   const [llmSummary, setLlmSummary] = useState('');
   
-  const [history, setHistory] = useState([]);
-
-  const CURRENT_BALANCE = 142050;
   const time = () => new Date().toLocaleTimeString('en-US', { hour12: false });
 
   // --- DEMO AUTOMATION ENGINE ---
   const runDemo = (demoPayee, demoAmount) => {
+    if (status !== 'idle') return; 
     setPayee(demoPayee);
     setAmount(demoAmount.toString());
-    // Auto-fill and bypass PIN for seamless live pitching
     executeTransaction(demoPayee, demoAmount.toString(), true);
   };
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
+    if (status !== 'idle') return; 
     if (!payee || !amount) return;
+
+    // BUG FIX: Strict Minimum ₹1 constraint
+    const numAmount = parseFloat(amount.replace(/,/g, ''));
+    if (isNaN(numAmount) || numAmount < 1) {
+      alert("⚠️ Invalid Amount: Minimum transfer amount is ₹1.");
+      return;
+    }
+
     setPinError('');
     setShowPinModal(true);
   };
@@ -68,7 +78,8 @@ export default function App() {
       signalCount++;
     };
 
-    if (numAmount > CURRENT_BALANCE) {
+    // DYNAMIC BALANCE CHECK
+    if (numAmount > currentBalance) {
       setTimeout(() => {
         setStatus('blocked');
         addSignal('INSUFFICIENT FUNDS', 100, 'Amount requested exceeds available account balance.');
@@ -85,7 +96,6 @@ export default function App() {
     const payeeLower = txPayee.toLowerCase();
     
     setTimeout(() => {
-      // THE AMAZON IMPERSONATION CHECK
       if (payeeLower === 'amizon') {
         addSignal('BRAND IMPERSONATION', 45, 'Recipient name closely resembles trusted brand "Amazon"');
         setLogs(prev => [...prev, `${time()} — [ALERT] Possible brand impersonation detected.`]);
@@ -134,6 +144,7 @@ export default function App() {
         setStatus('safe');
         setLogs(prev => [...prev, `${time()} — Transaction CLEARED. Payment successful.`]);
         saveToHistory(txPayee, txAmount, 'Success');
+        setCurrentBalance(prev => prev - numAmount);
       }
     }, 4500);
   };
@@ -191,19 +202,18 @@ export default function App() {
           {view === 'dashboard' && status === 'idle' && (
             <div className="space-y-5 mt-2 animate-in fade-in duration-500 overflow-y-auto pb-4">
               
-              {/* JUDGE DEMO BUTTONS */}
               <div className="bg-slate-900/80 p-3 rounded-2xl border border-sky-900/50">
                 <p className="text-[10px] text-sky-400 font-bold mb-2 uppercase tracking-widest flex items-center gap-1"><Zap className="w-3 h-3"/> Quick Pitch Simulations</p>
                 <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => runDemo('Mom', '500')} className="bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 p-2 rounded-xl text-center transition-colors">
+                  <button onClick={() => runDemo('Mom', '500')} disabled={status !== 'idle'} className={`bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 p-2 rounded-xl text-center transition-colors ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <p className="text-xs font-bold text-emerald-400">SAFE</p>
                     <p className="text-[10px] text-slate-400">₹500</p>
                   </button>
-                  <button onClick={() => runDemo('Unknown_99', '11111')} className="bg-orange-950/40 hover:bg-orange-900/60 border border-orange-800/50 p-2 rounded-xl text-center transition-colors">
+                  <button onClick={() => runDemo('Unknown_99', '11111')} disabled={status !== 'idle'} className={`bg-orange-950/40 hover:bg-orange-900/60 border border-orange-800/50 p-2 rounded-xl text-center transition-colors ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <p className="text-xs font-bold text-orange-400">MEDIUM</p>
                     <p className="text-[10px] text-slate-400">₹11,111</p>
                   </button>
-                  <button onClick={() => runDemo('amizon', '90500')} className="bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 p-2 rounded-xl text-center transition-colors">
+                  <button onClick={() => runDemo('amizon', '90500')} disabled={status !== 'idle'} className={`bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 p-2 rounded-xl text-center transition-colors ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <p className="text-xs font-bold text-red-400">FRAUD</p>
                     <p className="text-[10px] text-slate-400">₹90,500</p>
                   </button>
@@ -214,7 +224,8 @@ export default function App() {
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">Available Balance</p>
                   <p className="text-xl font-bold text-white flex items-center gap-2">
-                    {showBalance ? '₹1,42,050.00' : '₹ • • • • • •'}
+                    {/* BUG FIX: Proper dynamic currency formatting that naturally handles decimals */}
+                    {showBalance ? `₹${currentBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹ • • • • • •'}
                   </p>
                 </div>
                 <button onClick={() => setShowBalance(!showBalance)} className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
@@ -227,17 +238,21 @@ export default function App() {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Payee Details</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input type="text" required value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="e.g., mishraji@ybl" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
+                    <input type="text" required value={payee} disabled={status !== 'idle'} onChange={(e) => setPayee(e.target.value)} placeholder="e.g., mishraji@ybl" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
                   </div>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Amount (₹)</label>
                   <div className="relative">
                     <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                    <input type="number" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
+                    <input type="number" step="any" required value={amount} disabled={status !== 'idle'} 
+                      onChange={(e) => {
+                        if (e.target.value.length <= 9) setAmount(e.target.value);
+                      }} 
+                      placeholder="5000" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
                   </div>
                 </div>
-                <button type="submit" className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
+                <button type="submit" disabled={status !== 'idle'} className={`w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg ${status !== 'idle' ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   Proceed to Pay
                 </button>
               </form>
@@ -253,20 +268,24 @@ export default function App() {
             <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
               <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">Transaction Ledger</h3>
               <div className="bg-black/60 rounded-2xl p-4 flex-1 border border-slate-700 overflow-y-auto space-y-3 shadow-inner">
-                {history.map(tx => (
-                  <div key={tx.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center">
-                    <div>
-                      <p className="text-white font-bold text-sm truncate w-32">{tx.payee}</p>
-                      <p className="text-xs text-slate-400">{tx.date}</p>
+                {history.length === 0 ? (
+                  <p className="text-slate-500 text-center mt-10 text-sm">No transactions yet.</p>
+                ) : (
+                  history.map(tx => (
+                    <div key={tx.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white font-bold text-sm truncate">{tx.payee}</p>
+                        <p className="text-xs text-slate-400">{tx.date}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-white font-bold text-sm truncate max-w-[120px]">₹{tx.amount}</p>
+                        <p className={`text-[10px] uppercase font-black tracking-wider ${tx.status.includes('Success') ? 'text-emerald-400' : tx.status.includes('Hold') ? 'text-orange-400' : 'text-red-400'}`}>
+                          {tx.status}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white font-bold text-sm">₹{tx.amount}</p>
-                      <p className={`text-[10px] uppercase font-black tracking-wider ${tx.status.includes('Success') ? 'text-emerald-400' : tx.status.includes('Hold') ? 'text-orange-400' : 'text-red-400'}`}>
-                        {tx.status}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -280,7 +299,6 @@ export default function App() {
                   <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest">Live Feed</h3>
                 </div>
                 
-                {/* THE EXPLAINABILITY BUTTON */}
                 {(status === 'blocked' || status === 'warning') && (
                   <button onClick={() => setShowRiskPanel(true)} className="bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-200 text-xs font-black tracking-widest py-1.5 px-4 rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.4)] animate-pulse">
                     <HelpCircle className="w-4 h-4" /> WHY?
@@ -345,13 +363,11 @@ export default function App() {
               <button onClick={() => setShowRiskPanel(false)} className="bg-slate-800 p-2 rounded-full text-white"><XOctagon className="w-5 h-5"/></button>
             </div>
 
-            {/* Simulated LLM API Call Output */}
             <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 mb-6 shadow-inner">
               <p className="text-xs text-indigo-400 font-bold mb-2 flex items-center gap-1 uppercase tracking-widest"><Sparkles className="w-3 h-3"/> Gemini AI Summary</p>
               <p className="text-sm text-indigo-100 leading-relaxed">"{llmSummary}"</p>
             </div>
 
-            {/* The Deterministic Rule Engine List */}
             <div className="flex-1 overflow-y-auto space-y-3 mb-6">
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Rule Engine Signals</p>
               {riskSignals.map((signal) => (
@@ -367,7 +383,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* Footer Calculation */}
             <div className="border-t border-slate-800 pt-4 pb-2">
               <div className="flex justify-between items-center mb-4 px-2">
                 <span className="text-sm font-bold text-slate-400 tracking-widest">TOTAL SCORE:</span>
