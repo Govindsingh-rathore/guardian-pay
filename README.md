@@ -1,16 +1,26 @@
-# React + Vite
+# 🛡️ GuardianAI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**A Real-Time Payment Scam Interception Engine**
+Built for Hackathon Problem Statement **PS09**.
 
-Currently, two official plugins are available:
+🔗 **[Live Demo on Vercel](https://guardian-pay-chi.vercel.app)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Overview
+Digital payment scams rely on urgency and unverified recipients. **GuardianAI** acts as an agentic payment-security assistant capable of analyzing a payment request, evaluating risk vectors, and taking appropriate protective action *before* the transaction completes.
 
-## React Compiler
+## 🧠 Core Features
+* **Deterministic Risk Engine:** Mathematically evaluates transactions based on historical trust, volume anomalies, and brand impersonation checks.
+* **Explainable AI (XAI) Panel:** Provides a clear, numbered breakdown of *why* a transaction was flagged (e.g., +45 points for Brand Impersonation), ensuring complete auditability.
+* **Simulated Security Interventions:** Dynamically locks payments requiring OTP verification (Medium Risk) or outright suspends suspected fraud (High Risk).
+* **Live Transaction Ledger:** Persistent tracking of successful, held, and blocked transfers with dynamic balance adjustments.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 💻 Tech Stack
+* **Frontend:** React.js (Vite)
+* **Styling:** Tailwind CSS v4 (Glassmorphism UI)
+* **Icons:** Lucide React
+* **Deployment:** Vercel
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## 🛠️ How to Run Locally
+1. Clone this repository.
+2. Run `npm install` to install dependencies.
+3. Run `npm run dev` to start the local development server.
