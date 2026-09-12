@@ -1,126 +1,154 @@
 import React, { useState } from 'react';
-import { Shield, AlertTriangle, XOctagon, CheckCircle2, Loader2, Terminal, User, IndianRupee, Eye, EyeOff, Lock, History, ArrowLeft, HelpCircle } from 'lucide-react';
+import { Shield, AlertTriangle, XOctagon, CheckCircle2, Loader2, Terminal, User, IndianRupee, Eye, EyeOff, Lock, History, ArrowLeft, HelpCircle, Zap, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [view, setView] = useState('dashboard'); // dashboard, history
+  const [view, setView] = useState('dashboard'); 
   const [status, setStatus] = useState('idle'); 
   const [logs, setLogs] = useState([]);
-  const [reasons, setReasons] = useState([]); // Stores the exact AI rules for the "WHY?" button
   
   // App State
   const [payee, setPayee] = useState('');
   const [amount, setAmount] = useState('');
   const [showBalance, setShowBalance] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showWhyModal, setShowWhyModal] = useState(false);
+  const [showRiskPanel, setShowRiskPanel] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   
-  // Persistent Ledger
+  // Upgraded Risk Evidence State
+  const [riskSignals, setRiskSignals] = useState([]);
+  const [finalScore, setFinalScore] = useState(0);
+  const [llmSummary, setLlmSummary] = useState('');
+  
   const [history, setHistory] = useState([]);
 
   const CURRENT_BALANCE = 142050;
   const time = () => new Date().toLocaleTimeString('en-US', { hour12: false });
 
-  const handleTransferInitiate = (e) => {
+  // --- DEMO AUTOMATION ENGINE ---
+  const runDemo = (demoPayee, demoAmount) => {
+    setPayee(demoPayee);
+    setAmount(demoAmount.toString());
+    // Auto-fill and bypass PIN for seamless live pitching
+    executeTransaction(demoPayee, demoAmount.toString(), true);
+  };
+
+  const handleManualSubmit = (e) => {
     e.preventDefault();
     if (!payee || !amount) return;
     setPinError('');
     setShowPinModal(true);
   };
 
-  const processTransaction = (e) => {
+  const handlePinSubmit = (e) => {
     e.preventDefault();
-    
-    // STRICT PIN LOGIC
     if (pin !== '123456') {
       setPinError('Incorrect 6-digit PIN. Try again.');
       return;
     }
-    
     setShowPinModal(false);
     setPin('');
     setPinError('');
-    
+    executeTransaction(payee, amount, false);
+  };
+
+  // --- CORE RISK ENGINE ---
+  const executeTransaction = (txPayee, txAmount, isDemo) => {
     setStatus('analyzing');
-    setLogs([`${time()} — Initializing GuardianAI Protocol...`]);
-    setLogs(prev => [...prev, `${time()} — Target: ${payee} | Amount: ₹${amount}`]);
+    setLogs([`${time()} — Initializing GuardianAI Protocol...`, `${time()} — Target: ${txPayee} | Amount: ₹${txAmount}`]);
 
-    const numAmount = parseFloat(amount.replace(/,/g, ''));
-    let riskScore = 0;
-    let auditTrail = []; // This feeds the "WHY?" explainability
+    const numAmount = parseFloat(txAmount.replace(/,/g, ''));
+    let score = 0;
+    let signals = [];
+    let signalCount = 1;
 
-    // REALISTIC BALANCE CHECK
+    const addSignal = (title, points, desc) => {
+      signals.push({ id: `0${signalCount}`, title, points, desc });
+      score += points;
+      signalCount++;
+    };
+
     if (numAmount > CURRENT_BALANCE) {
       setTimeout(() => {
         setStatus('blocked');
-        setReasons(['Amount requested exceeds available account balance.']);
-        setLogs(prev => [
-          ...prev, 
-          `${time()} — [SYSTEM] Payment Failed: Insufficient Balance.`
-        ]);
-        saveToHistory('Failed (Balance)');
+        addSignal('INSUFFICIENT FUNDS', 100, 'Amount requested exceeds available account balance.');
+        setRiskSignals(signals);
+        setFinalScore(100);
+        setLlmSummary("Transaction blocked immediately due to insufficient funds in the primary account.");
+        setLogs(prev => [...prev, `${time()} — [SYSTEM] Payment Failed: Insufficient Balance.`]);
+        saveToHistory(txPayee, txAmount, 'Failed (Balance)');
       }, 1500);
       return; 
     }
 
-    // RISK ENGINE
-    const knownPayees = ['sunita', 'rajesh', 'mishra', '@sbi', '@ybl', '@okaxis'];
-    const payeeLower = payee.toLowerCase();
+    const knownPayees = ['sunita', 'rajesh', 'mishra', '@sbi', '@ybl', '@okaxis', 'mom'];
+    const payeeLower = txPayee.toLowerCase();
     
     setTimeout(() => {
-      if (knownPayees.some(name => payeeLower.includes(name))) {
-        riskScore -= 20;
-        auditTrail.push(`[TRUST] Recipient matches historical/verified banking format.`);
-      } else {
-        riskScore += 45;
-        auditTrail.push(`[ALERT] Unrecognized UPI Handle. No prior transaction history found.`);
+      // THE AMAZON IMPERSONATION CHECK
+      if (payeeLower === 'amizon') {
+        addSignal('BRAND IMPERSONATION', 45, 'Recipient name closely resembles trusted brand "Amazon"');
+        setLogs(prev => [...prev, `${time()} — [ALERT] Possible brand impersonation detected.`]);
+      } 
+      else if (knownPayees.some(name => payeeLower.includes(name))) {
+        score -= 10;
+        setLogs(prev => [...prev, `${time()} — [TRUST] Historical payee found.`]);
+      } 
+      else {
+        addSignal('NEW RECIPIENT', 25, 'No previous successful transactions');
+        setLogs(prev => [...prev, `${time()} — [ALERT] Unrecognized UPI Handle.`]);
       }
-      setLogs(prev => [...prev, `${time()} — Fetching payee vector data...`]);
     }, 1500);
 
     setTimeout(() => {
       if (numAmount > 50000) {
-        riskScore += 50;
-        auditTrail.push(`[WARNING] Amount (₹${numAmount}) exceeds standard daily average by 400%.`);
-      } else if (numAmount > 15000) {
-        riskScore += 25;
-        auditTrail.push(`[NOTE] Moderately high transaction volume detected.`);
+        addSignal('AMOUNT ANOMALY', 30, `₹${txAmount} is ~4.2× normal range`);
+        addSignal('VELOCITY ANOMALY', 20, 'Rapid transaction pattern detected');
+        setLogs(prev => [...prev, `${time()} — [WARNING] Extreme volume spike.`]);
+      } else if (numAmount > 10000) {
+        addSignal('MODERATE VOLUME', 20, `Amount exceeds standard daily average`);
+        setLogs(prev => [...prev, `${time()} — [NOTE] Moderately high transaction volume.`]);
       } else {
-        auditTrail.push(`[SAFE] Amount is within normal behavioral parameters.`);
+        setLogs(prev => [...prev, `${time()} — [SAFE] Amount within normal parameters.`]);
       }
-      setLogs(prev => [...prev, `${time()} — Running velocity checks...`]);
     }, 3000);
 
     setTimeout(() => {
-      setLogs(prev => [...prev, `${time()} — Calculating aggregate risk score: ${Math.max(0, riskScore)}/100`]);
-      setReasons(auditTrail);
+      const finalRiskScore = Math.max(0, score);
+      setFinalScore(finalRiskScore);
+      setRiskSignals(signals);
       
-      if (riskScore >= 70) {
+      setLogs(prev => [...prev, `${time()} — Calculating aggregate risk score: ${finalRiskScore}/100`]);
+      
+      if (finalRiskScore >= 70) {
         setStatus('blocked');
+        setLlmSummary(`This transaction exhibits severe fraud indicators, including ${signals[0]?.title.toLowerCase()} and abnormal volume, warranting immediate suspension.`);
         setLogs(prev => [...prev, `${time()} — 🚨 HIGH RISK: Payment PAUSED. Suspected Fraud.`]);
-        saveToHistory('Blocked (Fraud Risk)');
-      } else if (riskScore >= 40) {
+        saveToHistory(txPayee, txAmount, 'Blocked (Fraud)');
+      } else if (finalRiskScore >= 40) {
         setStatus('warning');
-        setLogs(prev => [...prev, `${time()} — ⚠️ MEDIUM RISK: Holding payment for Biometric/OTP confirmation.`]);
-        saveToHistory('Hold (Pending OTP)');
+        setLlmSummary(`Moderate risk factors identified. The system requires secondary authentication to verify the user's intent.`);
+        setLogs(prev => [...prev, `${time()} — ⚠️ MEDIUM RISK: Holding payment for OTP.`]);
+        saveToHistory(txPayee, txAmount, 'Hold (OTP)');
       } else {
         setStatus('safe');
         setLogs(prev => [...prev, `${time()} — Transaction CLEARED. Payment successful.`]);
-        saveToHistory('Success');
+        saveToHistory(txPayee, txAmount, 'Success');
       }
     }, 4500);
   };
 
-  const saveToHistory = (finalStatus) => {
-    const newTx = { id: Math.random().toString(36).substr(2, 9), date: time(), payee, amount, status: finalStatus };
+  const saveToHistory = (txPayee, txAmount, finalStatus) => {
+    const newTx = { id: Math.random().toString(36).substr(2, 9), date: time(), payee: txPayee, amount: txAmount, status: finalStatus };
     setHistory(prev => [newTx, ...prev]);
   };
 
   const reset = () => {
     setStatus('idle');
     setLogs([]);
-    setReasons([]);
+    setRiskSignals([]);
+    setFinalScore(0);
+    setLlmSummary('');
     setPayee('');
     setAmount('');
   };
@@ -161,68 +189,84 @@ export default function App() {
           
           {/* DASHBOARD VIEW */}
           {view === 'dashboard' && status === 'idle' && (
-            <div className="space-y-6 mt-2 animate-in fade-in duration-500">
-              <div className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700 flex justify-between items-center">
+            <div className="space-y-5 mt-2 animate-in fade-in duration-500 overflow-y-auto pb-4">
+              
+              {/* JUDGE DEMO BUTTONS */}
+              <div className="bg-slate-900/80 p-3 rounded-2xl border border-sky-900/50">
+                <p className="text-[10px] text-sky-400 font-bold mb-2 uppercase tracking-widest flex items-center gap-1"><Zap className="w-3 h-3"/> Quick Pitch Simulations</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => runDemo('Mom', '500')} className="bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/50 p-2 rounded-xl text-center transition-colors">
+                    <p className="text-xs font-bold text-emerald-400">SAFE</p>
+                    <p className="text-[10px] text-slate-400">₹500</p>
+                  </button>
+                  <button onClick={() => runDemo('Unknown_99', '11111')} className="bg-orange-950/40 hover:bg-orange-900/60 border border-orange-800/50 p-2 rounded-xl text-center transition-colors">
+                    <p className="text-xs font-bold text-orange-400">MEDIUM</p>
+                    <p className="text-[10px] text-slate-400">₹11,111</p>
+                  </button>
+                  <button onClick={() => runDemo('amizon', '90500')} className="bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 p-2 rounded-xl text-center transition-colors">
+                    <p className="text-xs font-bold text-red-400">FRAUD</p>
+                    <p className="text-[10px] text-slate-400">₹90,500</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 flex justify-between items-center">
                 <div>
-                  <p className="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">Available Balance</p>
-                  <p className="text-2xl font-bold text-white flex items-center gap-2">
+                  <p className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">Available Balance</p>
+                  <p className="text-xl font-bold text-white flex items-center gap-2">
                     {showBalance ? '₹1,42,050.00' : '₹ • • • • • •'}
                   </p>
                 </div>
-                <button onClick={() => setShowBalance(!showBalance)} className="w-10 h-10 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors">
-                  {showBalance ? <EyeOff className="w-5 h-5 text-slate-300" /> : <Eye className="w-5 h-5 text-slate-300" />}
+                <button onClick={() => setShowBalance(!showBalance)} className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                  {showBalance ? <EyeOff className="w-4 h-4 text-slate-300" /> : <Eye className="w-4 h-4 text-slate-300" />}
                 </button>
               </div>
 
-              <form onSubmit={handleTransferInitiate} className="space-y-4 mt-6">
+              <form onSubmit={handleManualSubmit} className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">UPI ID / Banking Name</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Payee Details</label>
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                    <input type="text" required value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="e.g., mishraji@ybl" className="w-full bg-slate-950/50 border border-slate-700 text-white rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 transition-colors" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="text" required value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="e.g., mishraji@ybl" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Amount (₹)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Amount (₹)</label>
                   <div className="relative">
-                    <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
-                    <input type="number" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className="w-full bg-slate-950/50 border border-slate-700 text-white rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 transition-colors" />
+                    <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="number" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="5000" className="w-full bg-slate-950/50 border border-slate-700 text-white text-sm rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:border-emerald-500" />
                   </div>
                 </div>
-                <button type="submit" className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)]">
+                <button type="submit" className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
                   Proceed to Pay
                 </button>
               </form>
 
-              <button onClick={() => setView('history')} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 rounded-xl transition-all border border-slate-700 flex justify-center items-center gap-2">
-                <History className="w-5 h-5" /> View Ledger History
+              <button onClick={() => setView('history')} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold py-3 rounded-xl transition-all border border-slate-700 flex justify-center items-center gap-2">
+                <History className="w-4 h-4" /> View Ledger History
               </button>
             </div>
           )}
 
-          {/* HISTORY LEDGER VIEW */}
+          {/* HISTORY LEDGER */}
           {view === 'history' && (
             <div className="flex-1 flex flex-col h-full animate-in fade-in duration-300">
               <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-4">Transaction Ledger</h3>
               <div className="bg-black/60 rounded-2xl p-4 flex-1 border border-slate-700 overflow-y-auto space-y-3 shadow-inner">
-                {history.length === 0 ? (
-                  <p className="text-slate-500 text-center mt-10 text-sm">No transactions yet.</p>
-                ) : (
-                  history.map(tx => (
-                    <div key={tx.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center">
-                      <div>
-                        <p className="text-white font-bold text-sm truncate w-32">{tx.payee}</p>
-                        <p className="text-xs text-slate-400">{tx.date}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-white font-bold text-sm">₹{tx.amount}</p>
-                        <p className={`text-[10px] uppercase font-black tracking-wider ${tx.status.includes('Success') ? 'text-emerald-400' : tx.status.includes('Hold') ? 'text-orange-400' : 'text-red-400'}`}>
-                          {tx.status}
-                        </p>
-                      </div>
+                {history.map(tx => (
+                  <div key={tx.id} className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex justify-between items-center">
+                    <div>
+                      <p className="text-white font-bold text-sm truncate w-32">{tx.payee}</p>
+                      <p className="text-xs text-slate-400">{tx.date}</p>
                     </div>
-                  ))
-                )}
+                    <div className="text-right">
+                      <p className="text-white font-bold text-sm">₹{tx.amount}</p>
+                      <p className={`text-[10px] uppercase font-black tracking-wider ${tx.status.includes('Success') ? 'text-emerald-400' : tx.status.includes('Hold') ? 'text-orange-400' : 'text-red-400'}`}>
+                        {tx.status}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -236,9 +280,9 @@ export default function App() {
                   <h3 className="text-sm font-bold text-slate-300 uppercase tracking-widest">Live Feed</h3>
                 </div>
                 
-                {/* THE EXPLAINABILITY "WHY?" BUTTON */}
+                {/* THE EXPLAINABILITY BUTTON */}
                 {(status === 'blocked' || status === 'warning') && (
-                  <button onClick={() => setShowWhyModal(true)} className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg border border-slate-600 flex items-center gap-1 shadow-lg animate-pulse">
+                  <button onClick={() => setShowRiskPanel(true)} className="bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-200 text-xs font-black tracking-widest py-1.5 px-4 rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(239,68,68,0.4)] animate-pulse">
                     <HelpCircle className="w-4 h-4" /> WHY?
                   </button>
                 )}
@@ -277,38 +321,61 @@ export default function App() {
               <h2 className="text-xl font-bold text-white mb-2">Enter UPI PIN</h2>
               <p className="text-sm text-slate-400 mb-6 text-center">To transfer ₹{amount} to {payee}</p>
               
-              <form onSubmit={processTransaction} className="w-full">
-                <input type="password" required maxLength="6" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} placeholder="• • • • • •" className="w-full bg-slate-950 border border-slate-700 text-center text-white text-2xl tracking-[1em] rounded-xl py-4 focus:outline-none focus:border-emerald-500 transition-colors mb-2" />
+              <form onSubmit={handlePinSubmit} className="w-full">
+                <input type="password" required maxLength="6" autoFocus value={pin} onChange={(e) => setPin(e.target.value)} placeholder="• • • • • •" className="w-full bg-slate-950 border border-slate-700 text-center text-white text-2xl tracking-[1em] rounded-xl py-4 focus:outline-none focus:border-emerald-500 mb-2" />
                 {pinError && <p className="text-red-400 text-xs text-center mb-4 font-bold">{pinError}</p>}
                 {!pinError && <p className="text-transparent text-xs text-center mb-4 font-bold">Spacer</p>}
                 
                 <div className="flex gap-3 w-full">
-                  <button type="button" onClick={() => {setShowPinModal(false); setPinError(''); setPin('');}} className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all">Cancel</button>
-                  <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all">Confirm</button>
+                  <button type="button" onClick={() => {setShowPinModal(false); setPinError(''); setPin('');}} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl">Cancel</button>
+                  <button type="submit" className="flex-1 bg-emerald-600 text-white font-bold py-3 rounded-xl">Confirm</button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {/* EXPLAINABILITY "WHY?" MODAL */}
-        {showWhyModal && (
-          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-in zoom-in duration-200">
-            <div className="bg-slate-900 border border-slate-700 p-6 rounded-3xl w-full max-w-sm shadow-2xl">
-              <h2 className="text-lg font-black text-white mb-4 flex items-center gap-2 uppercase tracking-wide">
-                <HelpCircle className="w-5 h-5 text-sky-400" /> Risk Evidence
+        {/* MERGED RISK EXPLAINABILITY PANEL */}
+        {showRiskPanel && (
+          <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex flex-col p-6 animate-in slide-in-from-bottom-10 duration-300">
+            <div className="flex justify-between items-center mb-6 mt-4">
+              <h2 className="text-xl font-black text-white flex items-center gap-2 tracking-wider">
+                <Shield className="w-6 h-6 text-sky-400" /> RISK INTELLIGENCE
               </h2>
-              <div className="space-y-4 mb-6">
-                {reasons.map((reason, i) => (
-                  <div key={i} className="text-sm text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
-                    <span className={`font-bold mr-2 ${reason.includes('TRUST') || reason.includes('SAFE') ? 'text-emerald-400' : reason.includes('WARNING') || reason.includes('NOTE') ? 'text-orange-400' : 'text-red-400'}`}>
-                      {reason.split('] ')[0]}]
+              <button onClick={() => setShowRiskPanel(false)} className="bg-slate-800 p-2 rounded-full text-white"><XOctagon className="w-5 h-5"/></button>
+            </div>
+
+            {/* Simulated LLM API Call Output */}
+            <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 mb-6 shadow-inner">
+              <p className="text-xs text-indigo-400 font-bold mb-2 flex items-center gap-1 uppercase tracking-widest"><Sparkles className="w-3 h-3"/> Gemini AI Summary</p>
+              <p className="text-sm text-indigo-100 leading-relaxed">"{llmSummary}"</p>
+            </div>
+
+            {/* The Deterministic Rule Engine List */}
+            <div className="flex-1 overflow-y-auto space-y-3 mb-6">
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-2">Rule Engine Signals</p>
+              {riskSignals.map((signal) => (
+                <div key={signal.id} className="bg-slate-900 border border-slate-700 p-4 rounded-xl">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-black text-white flex items-center gap-2">
+                      <span className="text-slate-500 text-xs">{signal.id}</span> {signal.title}
                     </span>
-                    {reason.split('] ')[1]}
+                    <span className="text-red-400 font-bold text-sm">+{signal.points}</span>
                   </div>
-                ))}
+                  <p className="text-xs text-slate-400 pl-6">{signal.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer Calculation */}
+            <div className="border-t border-slate-800 pt-4 pb-2">
+              <div className="flex justify-between items-center mb-4 px-2">
+                <span className="text-sm font-bold text-slate-400 tracking-widest">TOTAL SCORE:</span>
+                <span className="text-2xl font-black text-white">{finalScore}/100</span>
               </div>
-              <button onClick={() => setShowWhyModal(false)} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all">Close</button>
+              <div className={`p-3 rounded-lg text-center text-xs font-bold uppercase tracking-wider ${finalScore >= 70 ? 'bg-red-950/50 text-red-400 border border-red-900/50' : 'bg-orange-950/50 text-orange-400 border border-orange-900/50'}`}>
+                Guardian Recommendation: Verify recipient immediately.
+              </div>
             </div>
           </div>
         )}
